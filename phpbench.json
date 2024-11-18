@@ -1,0 +1,14 @@
+{
+    "bootstrap": "vendor/autoload.php",
+    "path": "tests/Benchmark",
+    "time_unit": "microseconds",
+    "progress": "dots",
+    "retry_threshold": 5,
+    "reports": {
+        "performance": {
+            "extends": "aggregate",
+            "break": ["benchmark", "subject", "revs", "its"],
+            "cols": ["benchmark", "subject", "mean", "mode", "rstdev", "mem_peak"]
+        }
+    }
+} 

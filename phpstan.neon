@@ -1,0 +1,31 @@
+includes:
+    - vendor/phpstan/phpstan-strict-rules/rules.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-phpunit/rules.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - vendor/*
+        - storage/*
+        - bootstrap/cache/*
+    
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+    
+    ignoreErrors:
+        - '#PHPDoc tag @var#'
+        
+    reportUnmatchedIgnoredErrors: true
+    
+    symfony:
+        container_xml_path: var/cache/dev/App_KernelDevDebugContainer.xml
+        
+    doctrine:
+        objectManagerLoader: tests/object-manager.php
+        
+    scanDirectories:
+        - var/cache/dev/Symfony/Config

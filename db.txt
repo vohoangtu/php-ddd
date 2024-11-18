@@ -1,0 +1,220 @@
+-- Custom ENUM types
+CREATE TYPE order_status AS ENUM ('pending', 'processing', 'completed', 'cancelled');
+CREATE TYPE email_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+CREATE TYPE attribute_type AS ENUM ('string', 'number', 'boolean', 'date', 'array', 'object');
+CREATE TYPE policy_effect AS ENUM ('allow', 'deny');
+CREATE TYPE policy_decision AS ENUM ('allow', 'deny');
+
+-- Core tables
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10,2) NOT NULL,
+    stock INTEGER NOT NULL,
+    category_id INTEGER,
+    sku VARCHAR(100) UNIQUE,
+    image VARCHAR(255),
+    is_active BOOLEAN DEFAULT true,
+    low_stock_threshold INTEGER DEFAULT 5,
+    original_price DECIMAL(10,2),
+    rating DECIMAL(3,2),
+    view_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    parent_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    customer_name VARCHAR(255) NOT NULL,
+    customer_email VARCHAR(255) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status order_status DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(id),
+    product_id INTEGER REFERENCES products(id),
+    quantity INTEGER NOT NULL,
+    price DECIMAL(10,2) NOT NULL
+);
+
+-- Authentication and Authorization tables
+CREATE TABLE roles (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE permissions (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE role_permissions (
+    role_id INTEGER,
+    permission_id INTEGER,
+    conditions JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_roles (
+    user_id INTEGER,
+    role_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_permissions (
+    user_id INTEGER,
+    permission_id INTEGER,
+    conditions JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, permission_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+);
+
+-- Email and Notifications
+CREATE TABLE email_queue (
+    id SERIAL PRIMARY KEY,
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_name VARCHAR(100),
+    subject VARCHAR(255) NOT NULL,
+    template VARCHAR(100) NOT NULL,
+    data JSONB,
+    priority INTEGER DEFAULT 1,
+    status email_status DEFAULT 'pending',
+    attempts INTEGER DEFAULT 0,
+    error TEXT,
+    scheduled_for TIMESTAMP,
+    last_attempt TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Shopping features
+CREATE TABLE cart_items (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE wishlist_items (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, product_id)
+);
+
+-- OAuth and Authentication
+CREATE TABLE oauth_clients (
+    id SERIAL PRIMARY KEY,
+    client_id VARCHAR(80) NOT NULL UNIQUE,
+    encrypted_credentials TEXT NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    redirect_uris JSONB NOT NULL,
+    grant_types JSONB NOT NULL,
+    scopes JSONB,
+    is_confidential BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE access_tokens (
+    id SERIAL PRIMARY KEY,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    client_id INTEGER NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
+    scopes JSONB,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ABAC (Attribute Based Access Control)
+CREATE TABLE attributes (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    type attribute_type NOT NULL,
+    is_dynamic BOOLEAN DEFAULT false,
+    validation_rules JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE abac_policies (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    resource_type_id INTEGER,
+    effect policy_effect NOT NULL,
+    priority INTEGER DEFAULT 0,
+    conditions JSONB NOT NULL,
+    attributes_used JSONB,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_products_category ON products(category_id);
+CREATE INDEX idx_products_active_stock ON products(is_active, stock);
+CREATE INDEX idx_email_queue_status_scheduled ON email_queue(status, scheduled_for);
+CREATE INDEX idx_email_queue_priority_created ON email_queue(priority, created_at);
+CREATE INDEX idx_access_tokens_user ON access_tokens(user_id, expires_at);
+CREATE INDEX idx_oauth_clients_client_id ON oauth_clients(client_id);
+
+-- Foreign Key Constraints
+ALTER TABLE products 
+    ADD CONSTRAINT fk_products_category 
+    FOREIGN KEY (category_id) REFERENCES categories(id);
+
+-- Initial Data
+INSERT INTO roles (name, description) VALUES
+    ('super_admin', 'Super Administrator with full system access'),
+    ('admin', 'System Administrator'),
+    ('manager', 'Department Manager'),
+    ('user', 'Regular User');
+
+-- Add any additional tables, indexes, or constraints as needed...
